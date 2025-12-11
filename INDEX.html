@@ -1,0 +1,296 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Digital Wallet</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f9;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    .container {
+      max-width: 400px;
+      padding: 20px;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      text-align: center;
+    }
+    .btn {
+      background: #6200ea;
+      color: white;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 10px;
+    }
+    .btn:hover {
+      background: #3700b3;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .hidden {
+      display: none;
+    }
+    .error {
+      color: red;
+    }
+    .transaction-list {
+      text-align: left;
+      margin-top: 20px;
+    }
+    .transaction-item {
+      background: #f9f9f9;
+      margin: 5px 0;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Login Section -->
+    <div id="login-section">
+      <h2>Login to Digital Wallet</h2>
+      <p id="login-error" class="error"></p>
+      <input type="text" id="username" placeholder="Username" required>
+      <input type="password" id="password" placeholder="Password" required>
+      <button class="btn" onclick="login()">Login</button>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div id="dashboard-section" class="hidden">
+      <h2>Welcome, <span id="user-name"></span>!</h2>
+      <h3>Account Balance: $<span id="account-balance">0.00</span></h3>
+      <div class="transaction-list" id="transaction-list">
+        <h3>Transaction History</h3>
+      </div>
+      <input type="number" id="add-amount" placeholder="Enter amount" required>
+      <input type="text" id="description" placeholder="Enter description" required>
+      <p id="dashboard-error" class="error"></p>
+      <button class="btn" onclick="addFunds()">Add/Remove Funds</button>
+      <button class="btn" onclick="goToTransaction()">Make a Transaction</button>
+      <button class="btn" style="background-color: red;" onclick="logout()">Logout</button>
+    </div>
+
+    <!-- Transaction Section -->
+    <div id="transaction-section" class="hidden">
+      <h2>Make a Transaction</h2>
+      <p id="transaction-error" class="error"></p>
+      <select id="payment-method" onchange="toggleUserIdField()">
+        <option value="credit-card">Credit Card</option>
+        <option value="debit-card">Debit Card</option>
+        <option value="bank-transfer">Bank Transfer</option>
+        <option value="crypto">Cryptocurrency</option>
+      </select>
+      <input type="number" id="transaction-amount" placeholder="Enter amount" required>
+      <input type="text" id="destination-user-id" class="hidden" placeholder="Enter 16-digit destination user ID" maxlength="16">
+      <button class="btn" onclick="makeTransaction()">Submit Transaction</button>
+      <button class="btn" style="background-color: gray;" onclick="goToDashboard()">Back to Dashboard</button>
+    </div>
+  </div>
+
+  <script>
+    const userData = {
+      username: "user1",
+      password: "password123",
+      balance: 1000,
+      transactions: []
+    };
+
+    function login() {
+  
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const loginError = document.getElementById("login-error");
+
+      if (username === userData.username && password === userData.password) {
+        document.getElementById("login-section").classList.add("hidden");
+        document.getElementById("dashboard-section").classList.remove("hidden");
+        document.getElementById("user-name").textContent = userData.username;
+        document.getElementById("account-balance").textContent = userData.balance.toFixed(2);
+	updateDashboardBalance();
+        updateTransactionList();
+        loginError.textContent = "";
+      } else {
+        loginError.textContent = "Invalid username or password.";
+      }
+    }
+
+    function addFunds() {
+  const amount = parseFloat(document.getElementById("add-amount").value);
+  const description = document.getElementById("description").value.trim();
+  const dashboardError = document.getElementById("dashboard-error");
+
+  if (isNaN(amount) || amount <= 0 || !description) {
+    dashboardError.textContent = "Enter a valid amount and description.";
+    return;
+  }
+
+  fetch("add_transaction.php", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      user_id: 1, // Replace with the actual logged-in user's ID
+      amount: amount,
+      description: description,
+      type: description.toLowerCase().includes("salary") ? "Add Funds" : "Deduction"
+    })
+  })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === "success") {
+        alert(data.message);
+        userData.balance += description.toLowerCase().includes("salary") ? amount : -amount;
+        document.getElementById("account-balance").textContent = userData.balance.toFixed(2);
+        document.getElementById("add-amount").value = "";
+        document.getElementById("description").value = "";
+      } else {
+        dashboardError.textContent = data.message;
+      }
+    })
+    .catch(error => {
+      console.error("Error:", error);
+      dashboardError.textContent = "Failed to add funds.";
+    });
+}
+
+    function toggleUserIdField() {
+      const method = document.getElementById("payment-method").value;
+      const userIdField = document.getElementById("destination-user-id");
+      userIdField.classList.toggle("hidden", method !== "credit-card" && method !== "debit-card");
+    }
+
+    function makeTransaction() {
+  const amount = parseFloat(document.getElementById("transaction-amount").value);
+  const type = document.getElementById("payment-method").value;
+  const card_number = document.getElementById("destination-user-id").value.trim();
+  const transactionError = document.getElementById("transaction-error");
+
+  transactionError.textContent = "";
+
+  // Validation
+  if (
+    isNaN(amount) || 
+    amount <= 0 || 
+    ((type === "credit-card" || type === "debit-card") && card_number.length !== 16)
+  ) {
+    transactionError.textContent = "Enter valid details.";
+    return;
+  }
+
+  if (amount > parseFloat(document.getElementById("account-balance").textContent)) {
+    transactionError.textContent = "Insufficient balance.";
+    return;
+  }
+
+  // Send transaction details to the server
+fetch("transaction.php", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    userId: 1, // Replace with actual logged-in user ID
+    amount: parseFloat(document.getElementById("transaction-amount").value),
+    type: document.getElementById("payment-method").value,
+    card_number: document.getElementById("destination-user-id").value || null,
+  }),
+})
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === "success") {
+      document.getElementById("account-balance").textContent = data.new_balance.toFixed(2);
+      alert("Transaction successful!");
+      updateDashboardBalance();
+    } else {
+      alert(data.message);
+    }
+  })
+  .catch(error => console.error("Fetch Error:", error));
+
+
+	updateDashboardBalance();
+	goToDashboard();
+}
+
+    function updateTransactionList() {
+      const transactionList = document.getElementById("transaction-list");
+      transactionList.innerHTML = "<h3>Transaction History</h3>";
+      userData.transactions.forEach((t, i) => {
+        const item = document.createElement("div");
+        item.classList.add("transaction-item");
+        item.textContent = `${i + 1}. $${Math.abs(t.amount).toFixed(2)} - ${t.description} (${t.type})`;
+        transactionList.appendChild(item);
+      });
+    }
+
+    function goToTransaction() {
+      document.getElementById("dashboard-section").classList.add("hidden");
+      document.getElementById("transaction-section").classList.remove("hidden");
+    }
+
+    function goToDashboard() {
+      document.getElementById("transaction-section").classList.add("hidden");
+      document.getElementById("dashboard-section").classList.remove("hidden");
+      updateDashboardBalance();
+    }
+
+    function logout() {
+      document.getElementById("login-section").classList.remove("hidden");
+      document.getElementById("dashboard-section").classList.add("hidden");
+      document.getElementById("transaction-section").classList.add("hidden");
+    }
+function fetchBalance(userId) {
+  return fetch("fetch_balance.php", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ userId }),
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.status === "success") {
+        return data.balance;
+      } else {
+        console.error(data.message);
+        alert("Error fetching balance: " + data.message);
+        return null;
+      }
+    })
+    .catch((error) => {
+      console.error("Error:", error);
+      alert("Failed to fetch balance.");
+      return null;
+    });
+}
+
+async function updateDashboardBalance() {
+  const userId = 1; // Replace with the actual logged-in user's ID
+  const balance = await fetchBalance(userId);
+  if (balance !== null) {
+    document.getElementById("account-balance").textContent = parseFloat(balance).toFixed(2);
+  }
+}
+
+  </script>
+</body>
+</html>
+
+
